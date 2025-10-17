@@ -4,6 +4,8 @@ import tarfile
 import urllib.request
 import matplotlib.pyplot as plt
 import numpy as np
+from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.metrics.pairwise import rbf_kernel
 from sklearn.model_selection import train_test_split
 from zlib import crc32
 from sklearn.model_selection import StratifiedShuffleSplit
@@ -13,12 +15,14 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import OrdinalEncoder, StandardScaler
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.linear_model import LinearRegression
-from sklearn.compose import TransformedTargetRegressor
+from sklearn.compose import TransformedTargetRegressor, ColumnTransformer, make_column_selector
 from sklearn.preprocessing import FunctionTransformer
 from sklearn.cluster import KMeans
 from sklearn.pipeline import Pipeline
 from sklearn.pipeline import make_pipeline
 from sklearn import set_config
+from sklearn.compose import ColumnTransformer
+from sklearn.metrics import mean_squared_error
 
 
 # This task is about predicting housing price with 10 parameters
@@ -233,4 +237,87 @@ df_housing_num_prepared = pd.DataFrame(
     housing_num_prepared, columns=num_pipeline.get_feature_names_out(),
     index=housing_num3.index)
 print(df_housing_num_prepared.head(2))  # extra code
+
+
+def column_ratio(X):
+    return X[:, [0]] / X[:, [1]]
+
+
+def ratio_name(function_transformer, feature_names_in):
+    return ["ratio"]  # feature names out
+
+
+def ratio_pipeline():
+    return make_pipeline(
+        SimpleImputer(strategy="median"),
+        FunctionTransformer(column_ratio, feature_names_out=ratio_name),
+        StandardScaler())
+
+
+class ClusterSimilarity(BaseEstimator, TransformerMixin):
+    def __init__(self, n_clusters=10, gamma=1.0, random_state=None):
+        self.n_clusters = n_clusters
+        self.gamma = gamma
+        self.random_state = random_state
+
+    def fit(self, X, y=None, sample_weight=None):
+        self.kmeans_ = KMeans(self.n_clusters, n_init=10,
+                              random_state=self.random_state)
+        self.kmeans_.fit(X, sample_weight=sample_weight)
+        return self  # always return self!
+
+    def transform(self, X):
+        return rbf_kernel(X, self.kmeans_.cluster_centers_, gamma=self.gamma)
+
+    def get_feature_names_out(self, names=None):
+        return [f"Cluster {i} similarity" for i in range(self.n_clusters)]
+
+
+num_attribs = ["longitude", "latitude", "housing_median_age", "total_rooms",
+               "total_bedrooms", "population", "households", "median_income"]
+cat_attribs = ["ocean_proximity"]
+
+cat_pipeline = make_pipeline(
+    SimpleImputer(strategy="most_frequent"),
+    OneHotEncoder(handle_unknown="ignore"))
+
+preprocessing = ColumnTransformer([
+    ("num", num_pipeline, num_attribs),
+    ("cat", cat_pipeline, cat_attribs),
+])
+
+log_pipeline = make_pipeline(
+    SimpleImputer(strategy="median"),
+    FunctionTransformer(np.log, feature_names_out="one-to-one"),
+    StandardScaler())
+cluster_simil = ClusterSimilarity(n_clusters=10, gamma=1., random_state=42)
+default_num_pipeline = make_pipeline(SimpleImputer(strategy="median"),
+                                     StandardScaler())
+preprocessing = ColumnTransformer([
+    ("bedrooms", ratio_pipeline(), ["total_bedrooms", "total_rooms"]),
+    ("rooms_per_house", ratio_pipeline(), ["total_rooms", "households"]),
+    ("people_per_house", ratio_pipeline(), ["population", "households"]),
+    ("log", log_pipeline, ["total_bedrooms", "total_rooms", "population",
+                           "households", "median_income"]),
+    ("geo", cluster_simil, ["latitude", "longitude"]),
+    ("cat", cat_pipeline, make_column_selector(dtype_include=object)), ],
+    remainder=default_num_pipeline)  # one column remaining: housing_median_age
+
+housing_prepared = preprocessing.fit_transform(housing)
+print(preprocessing.get_feature_names_out())
+
+# A QUICK SUMMARY OF THE CURRENT PROGRESS:
+# 1. We have got the data and explored it
+# 2. We have sampled the training set and the test set
+# 3. We have generated a preprocessing pipeline to automatically clean up and prepare your data for ML
+
+# Afterwards, we need to train the model, and use it to predict
+# The first attempt is to create a linear regression
+lin_reg = make_pipeline(preprocessing, LinearRegression())
+lin_reg.fit(housing, housing_labels)
+housing_predictions = lin_reg.predict(housing)
+print(housing_predictions[:5].round(-2))
+
+lin_rmse = mean_squared_error(housing_labels, housing_predictions)
+print(lin_rmse)
 
