@@ -7,6 +7,10 @@ from sklearn.metrics import confusion_matrix
 from sklearn.metrics import precision_score, recall_score
 from sklearn.metrics import f1_score
 from sklearn.metrics import precision_recall_curve
+from sklearn.metrics import roc_curve
+from sklearn.metrics import roc_auc_score
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.svm import SVC
 
 
 mnist = fetch_openml('mnist_784', as_frame=False)
@@ -155,7 +159,105 @@ y_scores = cross_val_predict(sgd_clf, X_train, y_train_5, cv=3,
 precisions, recalls, thresholds = precision_recall_curve(y_train_5, y_scores)
 
 # 3. Finally, use Matplotlib to plot precision and recall as functions of the threshold value
-plt.plot(thresholds, precisions[:-1], "b--", label="Precision", linewidth=2)
-plt.plot(thresholds, recalls[:-1], "g-", label="Recall", linewidth=2)
-plt.vlines(thresholds, 0, 1.0, "k", "dotted", label="threshold")
+# plt.plot(thresholds, precisions[:-1], "b--", label="Precision", linewidth=2)
+# plt.plot(thresholds, recalls[:-1], "g-", label="Recall", linewidth=2)
+# plt.vlines(thresholds, 0, 1.0, "k", "dotted", label="threshold")
+# plt.show()
+
+# We could also draw the graph of precision against recall
+# plt.plot(recalls, precisions, linewidth=2, label="Precision/Recall curve")
+# beautify the figure: add labels, grid, legend, arrow, and text
+# plt.show()
+
+
+# Suppose that we need 90% precision
+'''
+1. Yes, we could use the first graph to acquire the approximate locations that satisfy precision >= 90%
+However, it may not be that precise
+2. We could also calculate the minimum threshold value that satisfies precision >= 90%
+NumPy has a argmax() function to realize this
+'''
+idx_for_90_precision = (precisions >= 0.90).argmax()
+threshold_for_90_precision = thresholds[idx_for_90_precision]
+print("The threshold value for 90% precision is: ", threshold_for_90_precision)
+
+# To make predictions, we can run this code instead of using predict():
+y_train_prediction_90_precision = (y_scores >= threshold_for_90_precision)  # Generate the boolean array
+# We could now verify the precision and recall
+print("The precision score for the 90 precision is: ", precision_score(y_train_5, y_train_prediction_90_precision))
+# Output: 0.9000345901072293
+print("The recall score for the 90 precision is: ", recall_score(y_train_5, y_train_prediction_90_precision))
+# Output: 0.4799852425751706
+
+
+# Another way of evaluating is ROC curve
+# This curve shows recall against false positive rate
+fpr, tpr, thresholds = roc_curve(y_train_5, y_scores)
+idx_for_threshold_at_90 = (thresholds <= threshold_for_90_precision).argmax()
+tpr_90, fpr_90 = tpr[idx_for_threshold_at_90], fpr[idx_for_threshold_at_90]
+
+plt.plot(fpr, tpr, linewidth=2, label="ROC curve")
+plt.plot([0, 1], [0, 1], 'k:', label="Random classifier's ROC curve")
+plt.plot([fpr_90], [tpr_90], "ko", label="Threshold for 90% precision")
+# beautify the figure: add labels, grid, legend, arrow, and text
 plt.show()
+
+# The area under this curve is called AUC
+# We could calculate this area to evaluate the model, larger area (closer to 1) represents better performance
+print("The AUC score of the curve is: ", roc_auc_score(y_train_5, y_scores))
+# Output: 0.9604938554008616
+
+
+# Until now, we have learned the classification method of SGDClassifier, and how to evaluate its outcome
+# Next up, we will switch to another classification method called RandomForestClassifier
+forest_classifier = RandomForestClassifier(random_state=42)
+
+# However, RandomForestClassifier doesn't have a decision_function() method
+# Luckily, it still has a predict_proba() method that returns class probabilities for each instance
+# We still use the cross_val_predict() function to train the forest classifier:
+y_probas_forest = cross_val_predict(forest_classifier, X_train, y_train_5, cv=3,
+                                    method="predict_proba")
+# We can take a look at the first 2 images' prediction results:
+print(y_probas_forest[:2])
+# Output: [[0.11, 0.89],  89% likely to be '5'
+#        [0.99, 0.01]]  Only 1% likely to be '5'
+
+# Pass the trained forest classifier to the precision_recall_curve() function:
+y_scores_forest = y_probas_forest[:, 1]
+precisions_forest, recalls_forest, thresholds_forest = precision_recall_curve(y_train_5, y_scores_forest)
+# Then draw the graph:
+plt.plot(recalls_forest, precisions_forest, "b-", linewidth=2,
+         label="Random Forest")
+plt.plot(recalls, precisions, "--", linewidth=2, label="SGD")
+# beautify the figure: add labels, grid, and legend
+# plt.show()
+
+
+svm_classifier = SVC(random_state=42)
+svm_classifier.fit(X_train[:2000], y_train[:2000])
+print("Using SVM, we predict the first image: ", svm_classifier.predict([some_digit]))
+# Output: Using SVM, we predict the first image:  ['5']
+
+# Decision process
+some_digit_scores = svm_classifier.decision_function([some_digit])
+print("The decision values are shown in the array: ", some_digit_scores.round(2))
+# Output: [[ 3.79,  0.73,  6.06,  8.3 , -0.29,  9.3 ,  1.75,  2.77,  7.21, 4.82]]
+# The highest score 9.3 is on the 6th index, which corresponds to '5'
+class_id = some_digit_scores.argmax()
+print("The class id is: ", class_id)
+
+
+from sklearn.multiclass import OneVsRestClassifier
+ovr_classifier = OneVsRestClassifier(SVC(random_state=42))
+ovr_classifier.fit(X_train[:2000], y_train[:2000])
+print("Forcing to use OvR strategy: ", ovr_classifier.predict([some_digit]))
+# Output: Forcing to use OvR strategy:  ['5']
+
+
+
+
+
+
+
+
+
