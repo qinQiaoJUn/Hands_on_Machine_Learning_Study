@@ -11,7 +11,8 @@ from sklearn.metrics import roc_curve
 from sklearn.metrics import roc_auc_score
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import SVC
-
+from sklearn.multiclass import OneVsRestClassifier
+from sklearn.preprocessing import StandardScaler
 
 mnist = fetch_openml('mnist_784', as_frame=False)
 # Here, minst (MINST) is a very popular dataset containing 70,000 handwritten numbers and their labels
@@ -247,17 +248,38 @@ class_id = some_digit_scores.argmax()
 print("The class id is: ", class_id)
 
 
-from sklearn.multiclass import OneVsRestClassifier
 ovr_classifier = OneVsRestClassifier(SVC(random_state=42))
 ovr_classifier.fit(X_train[:2000], y_train[:2000])
 print("Forcing to use OvR strategy: ", ovr_classifier.predict([some_digit]))
 # Output: Forcing to use OvR strategy:  ['5']
 
+sgd_clf = SGDClassifier(random_state=42)
+sgd_clf.fit(X_train, y_train)
+print("Using SGD, the predicted result is: ", sgd_clf.predict([some_digit]))
+# Output: ['3']
+# This is incorrect! Prediction errors do happen!
 
+# To check what exactly leads to the error, we look at the scores that SGDClassifier assignsed to each class:
+print("SGD scores for each class: ", sgd_clf.decision_function([some_digit]).round())
+# Output: SGD scores for each class: [[-31893., -34420.,  -9531.,   1824., -22320.,  -1386., -26189.,
+#         -16148.,  -4604., -12051.]]
+# It's not very confident about the result, with only +1824 for '3', and all the others as negative values
 
+# We could also use cross_val_score() function to evaluate the model:
+print("The cross validation scores are: ", cross_val_score(sgd_clf, X_train, y_train, cv=3, scoring="accuracy"))
+# Output: The cross validation scores are:  [0.87365, 0.85835, 0.8689 ]
 
+# This is not very high. By scaling the inputs, we can increase the accuracy:
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train.astype("float64"))
+print("The cross validation scores after scaling are: ", cross_val_score(sgd_clf, X_train_scaled, y_train, cv=3, scoring="accuracy"))
+# Output: The cross validation scores after scaling are: [0.8983, 0.891 , 0.9018]
 
+from sklearn.metrics import ConfusionMatrixDisplay
+y_train_prediction2 = cross_val_predict(sgd_clf, X_train_scaled, y_train, cv=3)
+ConfusionMatrixDisplay.from_predictions(y_train, y_train_prediction2)
+plt.show()
 
-
-
-
+# Add normalization
+ConfusionMatrixDisplay.from_predictions(y_train, y_train_prediction2, normalize="true", values_format=".0%")
+plt.show()
