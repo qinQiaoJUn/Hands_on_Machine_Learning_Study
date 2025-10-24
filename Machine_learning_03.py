@@ -13,6 +13,8 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import SVC
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.preprocessing import StandardScaler
+import numpy as np
+from sklearn.neighbors import KNeighborsClassifier
 
 mnist = fetch_openml('mnist_784', as_frame=False)
 # Here, minst (MINST) is a very popular dataset containing 70,000 handwritten numbers and their labels
@@ -180,14 +182,14 @@ NumPy has a argmax() function to realize this
 '''
 idx_for_90_precision = (precisions >= 0.90).argmax()
 threshold_for_90_precision = thresholds[idx_for_90_precision]
-print("The threshold value for 90% precision is: ", threshold_for_90_precision)
+# print("The threshold value for 90% precision is: ", threshold_for_90_precision)
 
 # To make predictions, we can run this code instead of using predict():
 y_train_prediction_90_precision = (y_scores >= threshold_for_90_precision)  # Generate the boolean array
 # We could now verify the precision and recall
-print("The precision score for the 90 precision is: ", precision_score(y_train_5, y_train_prediction_90_precision))
+# print("The precision score for the 90 precision is: ", precision_score(y_train_5, y_train_prediction_90_precision))
 # Output: 0.9000345901072293
-print("The recall score for the 90 precision is: ", recall_score(y_train_5, y_train_prediction_90_precision))
+# print("The recall score for the 90 precision is: ", recall_score(y_train_5, y_train_prediction_90_precision))
 # Output: 0.4799852425751706
 
 
@@ -205,7 +207,7 @@ plt.show()
 
 # The area under this curve is called AUC
 # We could calculate this area to evaluate the model, larger area (closer to 1) represents better performance
-print("The AUC score of the curve is: ", roc_auc_score(y_train_5, y_scores))
+# print("The AUC score of the curve is: ", roc_auc_score(y_train_5, y_scores))
 # Output: 0.9604938554008616
 
 
@@ -219,7 +221,7 @@ forest_classifier = RandomForestClassifier(random_state=42)
 y_probas_forest = cross_val_predict(forest_classifier, X_train, y_train_5, cv=3,
                                     method="predict_proba")
 # We can take a look at the first 2 images' prediction results:
-print(y_probas_forest[:2])
+# print(y_probas_forest[:2])
 # Output: [[0.11, 0.89],  89% likely to be '5'
 #        [0.99, 0.01]]  Only 1% likely to be '5'
 
@@ -236,50 +238,101 @@ plt.plot(recalls, precisions, "--", linewidth=2, label="SGD")
 
 svm_classifier = SVC(random_state=42)
 svm_classifier.fit(X_train[:2000], y_train[:2000])
-print("Using SVM, we predict the first image: ", svm_classifier.predict([some_digit]))
+# print("Using SVM, we predict the first image: ", svm_classifier.predict([some_digit]))
 # Output: Using SVM, we predict the first image:  ['5']
 
 # Decision process
 some_digit_scores = svm_classifier.decision_function([some_digit])
-print("The decision values are shown in the array: ", some_digit_scores.round(2))
+# print("The decision values are shown in the array: ", some_digit_scores.round(2))
 # Output: [[ 3.79,  0.73,  6.06,  8.3 , -0.29,  9.3 ,  1.75,  2.77,  7.21, 4.82]]
 # The highest score 9.3 is on the 6th index, which corresponds to '5'
 class_id = some_digit_scores.argmax()
-print("The class id is: ", class_id)
+# print("The class id is: ", class_id)
 
 
 ovr_classifier = OneVsRestClassifier(SVC(random_state=42))
 ovr_classifier.fit(X_train[:2000], y_train[:2000])
-print("Forcing to use OvR strategy: ", ovr_classifier.predict([some_digit]))
+# print("Forcing to use OvR strategy: ", ovr_classifier.predict([some_digit]))
 # Output: Forcing to use OvR strategy:  ['5']
 
 sgd_clf = SGDClassifier(random_state=42)
 sgd_clf.fit(X_train, y_train)
-print("Using SGD, the predicted result is: ", sgd_clf.predict([some_digit]))
+# print("Using SGD, the predicted result is: ", sgd_clf.predict([some_digit]))
 # Output: ['3']
 # This is incorrect! Prediction errors do happen!
 
 # To check what exactly leads to the error, we look at the scores that SGDClassifier assignsed to each class:
-print("SGD scores for each class: ", sgd_clf.decision_function([some_digit]).round())
+# print("SGD scores for each class: ", sgd_clf.decision_function([some_digit]).round())
 # Output: SGD scores for each class: [[-31893., -34420.,  -9531.,   1824., -22320.,  -1386., -26189.,
 #         -16148.,  -4604., -12051.]]
 # It's not very confident about the result, with only +1824 for '3', and all the others as negative values
 
 # We could also use cross_val_score() function to evaluate the model:
-print("The cross validation scores are: ", cross_val_score(sgd_clf, X_train, y_train, cv=3, scoring="accuracy"))
+# print("The cross validation scores are: ", cross_val_score(sgd_clf, X_train, y_train, cv=3, scoring="accuracy"))
 # Output: The cross validation scores are:  [0.87365, 0.85835, 0.8689 ]
 
 # This is not very high. By scaling the inputs, we can increase the accuracy:
 scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train.astype("float64"))
-print("The cross validation scores after scaling are: ", cross_val_score(sgd_clf, X_train_scaled, y_train, cv=3, scoring="accuracy"))
+# print("The cross validation scores after scaling are: ", cross_val_score(sgd_clf, X_train_scaled, y_train, cv=3, scoring="accuracy"))
 # Output: The cross validation scores after scaling are: [0.8983, 0.891 , 0.9018]
 
 from sklearn.metrics import ConfusionMatrixDisplay
 y_train_prediction2 = cross_val_predict(sgd_clf, X_train_scaled, y_train, cv=3)
 ConfusionMatrixDisplay.from_predictions(y_train, y_train_prediction2)
-plt.show()
+# plt.show()
 
 # Add normalization
 ConfusionMatrixDisplay.from_predictions(y_train, y_train_prediction2, normalize="true", values_format=".0%")
+# plt.show()
+
+
+cl_a, cl_b = '3', '5'
+X_aa = X_train[(y_train == cl_a) & (y_train_prediction == cl_a)]
+X_ab = X_train[(y_train == cl_a) & (y_train_prediction == cl_b)]
+X_ba = X_train[(y_train == cl_b) & (y_train_prediction == cl_a)]
+X_bb = X_train[(y_train == cl_b) & (y_train_prediction == cl_b)]
+
+def plot_digits(instances, images_per_row=10):
+    size = 28
+    images_per_row = min(len(instances), images_per_row)
+    n_rows = (len(instances) - 1) // images_per_row + 1
+    n_empty = n_rows * images_per_row - len(instances)
+    padded = np.concatenate([instances, np.zeros((n_empty, size * size))], axis=0)
+    images = padded.reshape((n_rows, images_per_row, size, size))
+    rows = [np.concatenate(list(row), axis=1) for row in images]
+    image = np.concatenate(rows, axis=0)
+    plt.imshow(image, cmap="binary")
+    plt.axis("off")
+
+plt.figure(figsize=(12, 12))
+
+plt.subplot(221)
+plt.title(f"True {cl_a}, Predicted {cl_a} (Correct)")
+plot_digits(X_aa[:25])
+
+plt.subplot(222)
+plt.title(f"True {cl_a}, Predicted {cl_b} (Misclassified)")
+plot_digits(X_ab[:25])
+
+plt.subplot(223)
+plt.title(f"True {cl_b}, Predicted {cl_a} (Misclassified)")
+plot_digits(X_ba[:25])
+
+plt.subplot(224)
+plt.title(f"True {cl_b}, Predicted {cl_b} (Correct)")
+plot_digits(X_bb[:25])
+
 plt.show()
+
+
+y_train_large = (y_train >= '7')
+y_train_odd = (y_train.astype('int8') % 2 == 1)
+y_multilabel = np.c_[y_train_large, y_train_odd]
+knn_clf = KNeighborsClassifier()
+knn_clf.fit(X_train, y_multilabel)
+
+
+
+
+
