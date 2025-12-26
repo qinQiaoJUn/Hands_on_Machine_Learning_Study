@@ -319,15 +319,39 @@ print("The true answer is: ", y_train[2])
 # We have spotted a mistake. However, there could be more mistakes that haven't been discovered
 # Thus, we have to analyze all the prediction results, using Confusion Matrix:
 
+'''
+The following code for confusion matrix could take longer time to run
+thus, it could be commented to run faster, without interrupting other parts of the code
+'''
+# from sklearn.metrics import ConfusionMatrixDisplay
+# from sklearn.preprocessing import StandardScaler
+# scaler = StandardScaler()
+# X_train_scaled = scaler.fit_transform(X_train.astype("float64"))
+# y_train_prediction_for_CM = cross_val_predict(svm_classifier, X_train_scaled, y_train, cv=3)
+# ConfusionMatrixDisplay.from_predictions(y_train, y_train_prediction_for_CM, normalize="true", values_format=".0%")
+# plt.show()
+'''
+Ends here
+'''
+
+'''
+The following code for confusion matrix could take longer time to run
+thus, it could be commented to run faster, without interrupting other parts of the code
+'''
 from sklearn.metrics import ConfusionMatrixDisplay
 from sklearn.preprocessing import StandardScaler
 scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train.astype("float64"))
-y_train_prediction_for_CM = cross_val_predict(svm_classifier, X_train_scaled, y_train, cv=3)
-ConfusionMatrixDisplay.from_predictions(y_train, y_train_prediction_for_CM, normalize="true", values_format=".0%")
+y_train_prediction_for_CM2 = cross_val_predict(svm_classifier, X_train_scaled, y_train, cv=3)
+sample_weight = (y_train_prediction_for_CM2 != y_train)
+ConfusionMatrixDisplay.from_predictions(y_train, y_train_prediction_for_CM2,
+                                        sample_weight=sample_weight,
+                                        normalize="pred", values_format=".0%")
+# "normalize" parameter could be set as "true" or "pred" to realize different analyses
 plt.show()
-
-
+'''
+Ends here
+'''
 
 
 
