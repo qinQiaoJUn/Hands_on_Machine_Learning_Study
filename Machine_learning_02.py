@@ -5,6 +5,7 @@ import urllib.request
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics.pairwise import rbf_kernel
 from sklearn.model_selection import train_test_split
 from zlib import crc32
@@ -23,8 +24,9 @@ from sklearn.cluster import KMeans
 from sklearn.pipeline import Pipeline
 from sklearn.pipeline import make_pipeline
 from sklearn import set_config
-from sklearn.compose import ColumnTransformer
 from sklearn.metrics import mean_squared_error
+from sklearn.compose import ColumnTransformer
+from sklearn.cluster import KMeans
 
 
 # This task is about predicting housing price with 10 parameters
@@ -239,97 +241,130 @@ model = TransformedTargetRegressor(LinearRegression(),
 model.fit(housing[["median_income"]], housing_labels)
 predictions = model.predict(some_new_data)
 #
-# # Since "population" is a positive feature, and it has long-tail, we could use log function to transform it
-# # REMEMBER THAT IT WOULD BE BETTER FOR THE MACHINE TO LEARN IF WE SET THE DATA TO A "BELL" SHAPE?
-# log_transformer = FunctionTransformer(np.log, inverse_func=np.exp)
-# log_pop = log_transformer.transform(housing[["population"]])
-#
-# # Now let's build a pipeline to preprocess the numerical attributes
-# # The following pipeline code set all the empty units to the median
-# num_pipeline = Pipeline([
-#     ("impute", SimpleImputer(strategy="median")),
-#     ("standardize", StandardScaler()),
-# ])
+# Since "population" is a positive feature, and it has long-tail, we could use log function to transform it
+# REMEMBER THAT IT WOULD BE BETTER FOR THE MACHINE TO LEARN IF WE SET THE DATA TO A "BELL" SHAPE?
+log_transformer = FunctionTransformer(np.log, inverse_func=np.exp)
+log_pop = log_transformer.transform(housing[["population"]])
+
+# Now let's build a pipeline to preprocess the numerical attributes
+# The following pipeline code set all the empty units to the median
+num_pipeline = Pipeline([
+    ("impute", SimpleImputer(strategy="median")),
+    ("standardize", StandardScaler()),
+])
+
+# Of course, you don't have to name the estimators. Instead, you could use make_pipeline() method:
 # num_pipeline = make_pipeline(SimpleImputer(strategy="median"), StandardScaler())
-# set_config(display='diagram')
-# print(num_pipeline)
-#
-# housing_num_prepared = num_pipeline.fit_transform(housing_num3)
-# print(housing_num_prepared[:2].round(2))
-#
-# df_housing_num_prepared = pd.DataFrame(
-#     housing_num_prepared, columns=num_pipeline.get_feature_names_out(),
-#     index=housing_num3.index)
-# print(df_housing_num_prepared.head(2))  # extra code
-#
-#
-# def column_ratio(X):
-#     return X[:, [0]] / X[:, [1]]
-#
-#
-# def ratio_name(function_transformer, feature_names_in):
-#     return ["ratio"]  # feature names out
-#
-#
-# def ratio_pipeline():
-#     return make_pipeline(
-#         SimpleImputer(strategy="median"),
-#         FunctionTransformer(column_ratio, feature_names_out=ratio_name),
-#         StandardScaler())
-#
-#
-# class ClusterSimilarity(BaseEstimator, TransformerMixin):
-#     def __init__(self, n_clusters=10, gamma=1.0, random_state=None):
-#         self.n_clusters = n_clusters
-#         self.gamma = gamma
-#         self.random_state = random_state
-#
-#     def fit(self, X, y=None, sample_weight=None):
-#         self.kmeans_ = KMeans(self.n_clusters, n_init=10,
-#                               random_state=self.random_state)
-#         self.kmeans_.fit(X, sample_weight=sample_weight)
-#         return self  # always return self!
-#
-#     def transform(self, X):
-#         return rbf_kernel(X, self.kmeans_.cluster_centers_, gamma=self.gamma)
-#
-#     def get_feature_names_out(self, names=None):
-#         return [f"Cluster {i} similarity" for i in range(self.n_clusters)]
-#
-#
-# num_attribs = ["longitude", "latitude", "housing_median_age", "total_rooms",
-#                "total_bedrooms", "population", "households", "median_income"]
-# cat_attribs = ["ocean_proximity"]
-#
-# cat_pipeline = make_pipeline(
-#     SimpleImputer(strategy="most_frequent"),
-#     OneHotEncoder(handle_unknown="ignore"))
-#
-# preprocessing = ColumnTransformer([
-#     ("num", num_pipeline, num_attribs),
-#     ("cat", cat_pipeline, cat_attribs),
-# ])
-#
-# log_pipeline = make_pipeline(
-#     SimpleImputer(strategy="median"),
-#     FunctionTransformer(np.log, feature_names_out="one-to-one"),
-#     StandardScaler())
-# cluster_simil = ClusterSimilarity(n_clusters=10, gamma=1., random_state=42)
-# default_num_pipeline = make_pipeline(SimpleImputer(strategy="median"),
-#                                      StandardScaler())
-# preprocessing = ColumnTransformer([
-#     ("bedrooms", ratio_pipeline(), ["total_bedrooms", "total_rooms"]),
-#     ("rooms_per_house", ratio_pipeline(), ["total_rooms", "households"]),
-#     ("people_per_house", ratio_pipeline(), ["population", "households"]),
-#     ("log", log_pipeline, ["total_bedrooms", "total_rooms", "population",
-#                            "households", "median_income"]),
-#     ("geo", cluster_simil, ["latitude", "longitude"]),
-#     ("cat", cat_pipeline, make_column_selector(dtype_include=object)), ],
-#     remainder=default_num_pipeline)  # one column remaining: housing_median_age
-#
-# housing_prepared = preprocessing.fit_transform(housing)
-# print(preprocessing.get_feature_names_out())
-#
+# Let’s call the pipeline’s fit_transform() method and look at the output’s first two rows,
+# rounded to two decimal places:
+
+housing_num_prepared = num_pipeline.fit_transform(housing_num_imputer)
+print(housing_num_prepared[:2].round(2))
+
+df_housing_num_prepared = pd.DataFrame(
+    housing_num_prepared, columns=num_pipeline.get_feature_names_out(),
+    index=housing_num_imputer.index)
+
+print(df_housing_num_prepared[:2].round(2))
+
+num_attribs = ["longitude", "latitude", "housing_median_age", "total_rooms",
+               "total_bedrooms", "population", "households", "median_income"]
+cat_attribs = ["ocean_proximity"]
+
+cat_pipeline = make_pipeline(
+    SimpleImputer(strategy="most_frequent"),
+    OneHotEncoder(handle_unknown="ignore"))
+
+preprocessing = ColumnTransformer([
+    ("num", num_pipeline, num_attribs),
+    ("cat", cat_pipeline, cat_attribs),
+])
+
+# If we don't want to specify each column's name, we could use make_column_transformer()
+from sklearn.compose import make_column_selector, make_column_transformer
+
+full_preprocessing = make_column_transformer(
+    (num_pipeline, make_column_selector(dtype_include=np.number)),
+    (cat_pipeline, make_column_selector(dtype_include=object)),
+)
+
+housing_prepared = preprocessing.fit_transform(housing)
+feature_names = preprocessing.get_feature_names_out()
+
+housing_prepared_df = pd.DataFrame(
+    housing_prepared,
+    columns=feature_names,
+    index=housing.index
+)
+
+print(housing_prepared_df[:2].round(2))
+
+
+# To sum up, let's build a pipeline to process the original dataset end-to-end
+
+# The method that calculates the ratio of two columns
+def column_ratio(X):
+    return X[:, [0]] / X[:, [1]]
+
+# The method that returns the ratio column's name (here we just use "ratio")
+def ratio_name(function_transformer, feature_names_in):
+    return ["ratio"]  # feature names out
+
+# The method that creates a pipeline for calculating the ratio
+def ratio_pipeline():
+    return make_pipeline(
+        SimpleImputer(strategy="median"),  # Use median value to impute the empty values
+        FunctionTransformer(column_ratio, feature_names_out=ratio_name),  # Calculate the ratio
+        StandardScaler())  # Standardize the data
+
+
+class ClusterSimilarity(BaseEstimator, TransformerMixin):
+    def __init__(self, n_clusters=10, gamma=1.0, random_state=None):
+        self.n_clusters = n_clusters
+        self.gamma = gamma
+        self.random_state = random_state
+
+    def fit(self, X, y=None, sample_weight=None):
+        self.kmeans_ = KMeans(self.n_clusters, random_state=self.random_state)
+        self.kmeans_.fit(X, sample_weight=sample_weight)
+        return self  # always return self!
+
+    def transform(self, X):
+        return rbf_kernel(X, self.kmeans_.cluster_centers_, gamma=self.gamma)
+
+    def get_feature_names_out(self, names=None):
+        return [f"Cluster {i} similarity" for i in range(self.n_clusters)]
+
+
+# Make the data to its logarithm
+log_pipeline = make_pipeline(
+    SimpleImputer(strategy="median"),
+    FunctionTransformer(np.log, feature_names_out="one-to-one"),
+    StandardScaler())
+
+# Create 10 clusters, use this to determine how close is each sample with the clusters
+# We use this to replace latitude and longitude
+cluster_similarity = ClusterSimilarity(n_clusters=10, gamma=1., random_state=42)
+
+# Deal with other numeric data, just use the median value to impute the empty values
+default_num_pipeline = make_pipeline(SimpleImputer(strategy="median"),
+                                     StandardScaler())
+
+preprocessing_end_to_end = ColumnTransformer([
+        ("bedrooms", ratio_pipeline(), ["total_bedrooms", "total_rooms"]),  # Need bedroom ratio
+        ("rooms_per_house", ratio_pipeline(), ["total_rooms", "households"]),  # Need room ratio
+        ("people_per_house", ratio_pipeline(), ["population", "households"]),  # Need population ratio
+        ("log", log_pipeline, ["total_bedrooms", "total_rooms", "population",
+                               "households", "median_income"]),  # Make these 5 attributes more evenly distributed
+        ("geo", cluster_similarity, ["latitude", "longitude"]),  # Find the similarity of each sample and 10 clusters
+        ("cat", cat_pipeline, make_column_selector(dtype_include=object)),
+        # If the type is object, use categorical transformer
+        ],
+        remainder=default_num_pipeline)  # one column remaining: housing_median_age, just use default method to process
+
+# Now this is an NumPy array with 24 features:
+housing_prepared_end_to_end = preprocessing_end_to_end.fit_transform(housing)
+
 # # A QUICK SUMMARY OF THE CURRENT PROGRESS:
 # # 1. We have got the data and explored it
 # # 2. We have sampled the training set and the test set
@@ -337,11 +372,55 @@ predictions = model.predict(some_new_data)
 #
 # # Afterwards, we need to train the model, and use it to predict
 # # The first attempt is to create a linear regression
-# lin_reg = make_pipeline(preprocessing, LinearRegression())
-# lin_reg.fit(housing, housing_labels)
-# housing_predictions = lin_reg.predict(housing)
-# print(housing_predictions[:5].round(-2))
-#
-# lin_rmse = mean_squared_error(housing_labels, housing_predictions)
-# print(lin_rmse)
-#
+lin_reg = make_pipeline(preprocessing_end_to_end, LinearRegression())
+lin_reg.fit(housing, housing_labels)
+housing_predictions = lin_reg.predict(housing)
+print(housing_predictions[:5].round(-2))
+print(housing_labels.iloc[:5].values)
+
+lin_rmse = np.sqrt(mean_squared_error(housing_labels, housing_predictions))
+print("The linear regression RMSE: ", lin_rmse)
+# Output: 68300.88727399787
+# This result definitely doesn't fit our requirement in accuracy
+
+from sklearn.tree import DecisionTreeRegressor
+
+tree_reg = make_pipeline(preprocessing, DecisionTreeRegressor(random_state=42))
+tree_reg.fit(housing, housing_labels)
+
+housing_predictions = tree_reg.predict(housing)
+tree_rmse = np.sqrt(mean_squared_error(housing_labels, housing_predictions))
+print("The decision tree regression RMSE: ", tree_rmse)
+
+from sklearn.model_selection import cross_val_score
+
+tree_rmses = -cross_val_score(tree_reg, housing, housing_labels,
+                              scoring="neg_root_mean_squared_error", cv=10)
+print(pd.Series(tree_rmses).describe())
+
+# The next part of RandomForestRegressor code consumes lots of time, thus I temporarily comment it
+# from sklearn.ensemble import RandomForestRegressor
+# forest_reg = make_pipeline(preprocessing,
+#                            RandomForestRegressor(random_state=42))
+# forest_rmses = -cross_val_score(forest_reg, housing, housing_labels,
+#                                 scoring="neg_root_mean_squared_error", cv=10)
+# print(pd.Series(forest_rmses).describe())
+
+from sklearn.model_selection import GridSearchCV
+
+full_pipeline = Pipeline([
+    ("preprocessing", preprocessing_end_to_end),
+    ("random_forest", RandomForestRegressor(random_state=42)),
+])
+param_grid = [
+    {'preprocessing__geo__n_clusters': [5, 8, 10],
+     'random_forest__max_features': [4, 6, 8]},
+    {'preprocessing__geo__n_clusters': [10, 15],
+     'random_forest__max_features': [6, 8, 10]},
+]
+grid_search = GridSearchCV(full_pipeline, param_grid, cv=3,
+                           scoring='neg_root_mean_squared_error')
+grid_search.fit(housing, housing_labels)
+
+print("The best parameter combination suggested by grid search is: ", grid_search.best_params_)
+
